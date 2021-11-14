@@ -159,7 +159,54 @@ impl<W: Write> Builder<W> {
     ) -> io::Result<()> {
         prepare_header_path(self.get_mut(), header, path.as_ref())?;
         header.set_cksum();
-        self.append(&header, data)
+        self.append(header, data)
+    }
+
+    /// Adds a new symlink or hardlink to this archive.
+    ///
+    /// This function will set the specified path in the given header, which may
+    /// require appending a GNU long-linkname extension entry to the archive first.
+    /// The checksum for the header will be automatically updated via the
+    /// `set_cksum` method after setting the path. No other metadata in the
+    /// header will be modified.
+    ///
+    /// Then it will append the header. To produce a valid archive the `size` field
+    /// should be zero.
+    ///
+    /// Note that this will not attempt to seek the archive to a valid position,
+    /// so if the archive is in the middle of a read or some other similar
+    /// operation then this may corrupt the archive.
+    ///
+    /// Also note that after all entries have been written to an archive the
+    /// `finish` function needs to be called to finish writing the archive.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error for any intermittent I/O error which
+    /// occurs when either reading or writing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tar::{Builder, Header};
+    ///
+    /// let mut header = Header::new_gnu();
+    /// header.set_size(0);
+    /// header.set_cksum();
+    ///
+    /// let mut ar = Builder::new(Vec::new());
+    /// ar.append_link(&mut header, "really/long/path/to/foo", "really/long/another/path/to/bar").unwrap();
+    /// ```
+    pub fn append_link<P1: AsRef<Path>, P2: AsRef<Path>>(
+        &mut self,
+        header: &mut Header,
+        path: P1,
+        link_name: P2,
+    ) -> io::Result<()> {
+        prepare_header_path(self.get_mut(), header, path.as_ref())?;
+        prepare_header_link(self.get_mut(), header, link_name.as_ref())?;
+        header.set_cksum();
+        self.append(header, std::io::empty())
     }
 
     /// Adds a file on the local filesystem to this archive.
